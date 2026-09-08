@@ -115,8 +115,8 @@ export default app;
 // This keeps tests lightweight because createApp(mockHandler) does not need
 // to import OpenAI/Supabase-dependent modules.
 async function runMovieChoiceAgent(query: string) {
-  const { movieChoiceAgent } = await import("./agent.js");
-  return movieChoiceAgent(query);
+  const { movieChoiceAgentLatestVersion } = await import("./agentLatestVersion.js");
+  return movieChoiceAgentLatestVersion (query);
 }
 
 // Dynamically imports the MCP warmup client only when the warmup endpoint runs.

@@ -53,6 +53,7 @@ export function createMovieRagMcpApp(
   });
 
   app.post("/mcp", requireMcpApiKey, async (req, res, next) => {
+    console.log("[Movie RAG MCP] POST /mcp received");
     const server = createMovieRagMcpServer(movieRagHandler);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,

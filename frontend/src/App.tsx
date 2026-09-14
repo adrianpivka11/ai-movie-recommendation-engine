@@ -4,7 +4,7 @@ import Movie from "./Movie";
 import type { FormAnswers, MoviesFromServer, RecommendApiResponse, SeriesFromServer } from "./types";
 import Series from "./Series";
 
-const API_BASE_URL="https://movie-app-backend-gq5e.onrender.com"
+const API_BASE_URL=""
 
 
 

@@ -3,7 +3,7 @@ import express from "express";
 import type { McpWarmupResult } from "./mcp/mcpClient.js";
 import type { AgentOutput } from "./types.js";
 
-// A small interface for the recommendation use case.
+// A small interface for the recommendation use case
 // In production this calls the real AI agent, but tests can pass a fake handler.
 type RecommendationHandler = (query: string) => Promise<AgentOutput>;
 

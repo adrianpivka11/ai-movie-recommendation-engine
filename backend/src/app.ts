@@ -12,7 +12,7 @@ type RecommendationHandler = (query: string) => Promise<AgentOutput>;
 type WarmupHandler = () => Promise<McpWarmupResult[]>;
 
 /**
- * Creates and configures the Express application.
+ * Creates and configures the Express application..
  *
  * Keeping this separate from server.ts makes the app easier to test:
  * tests can import createApp() and call routes without opening a real network port.

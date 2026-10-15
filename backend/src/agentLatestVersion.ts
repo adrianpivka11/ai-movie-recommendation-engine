@@ -28,7 +28,7 @@ const SERIES_KEYWORDS = [
 ];
 
 /**
- * Latest production recommendation agent.
+ * Latest production recommendation agent
  *
  * This version keeps the MCP architecture but removes the expensive and
  * unstable LLM tool-router step. A small deterministic router decides which

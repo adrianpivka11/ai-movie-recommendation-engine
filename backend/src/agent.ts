@@ -67,7 +67,7 @@ export async function movieChoiceAgent(query: string): Promise<AgentOutput> {
           ),
       }),
       execute: async ({ query }) => {
-        // Calls the remote/local Series Search MCP service and unwraps its series array.
+        // Calls the remote/local Series Search MCP service and unwraps its series array
         const result = await callSeriesSearchMcp(query);
         return result.series;
       },

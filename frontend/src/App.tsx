@@ -4,7 +4,7 @@ import Movie from "./Movie";
 import type { FormAnswers, MoviesFromServer, RecommendApiResponse, SeriesFromServer } from "./types";
 import Series from "./Series";
 
-const API_BASE_URL=""
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
 
 
 

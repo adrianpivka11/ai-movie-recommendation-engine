@@ -1,4 +1,5 @@
-import { callMovieRagMcp, callSeriesSearchMcp } from "./mcp/mcpClient.js";
+import { retrieveSimilarMoviesByRAG } from "./rag.js";
+import { webSearchTool } from "./seriesWebSearch.js";
 import type { AgentOutput } from "./types.js";
 
 type RecommendationIntent = "movies" | "series" | "both";
@@ -30,62 +31,61 @@ const SERIES_KEYWORDS = [
 /**
  * Latest production recommendation agent.
  *
- * This version keeps the MCP architecture but removes the expensive and
- * unstable LLM tool-router step. A small deterministic router decides which
- * MCP service should be called, then the backend calls the MCP client directly.
+ * A small deterministic router selects the local recommendation functions.
+ * RAG and series search run in the backend process without MCP requests.
  */
 export async function movieChoiceAgentLatestVersion(
   query: string
 ): Promise<AgentOutput> {
   const intent = detectRecommendationIntent(query);
-  console.log(`[MCP Router Agent] Received question: ${query}`);
-  console.log(`[MCP Router Agent] Detected intent: ${intent}`);
+  console.log(`[Router Agent] Received question: ${query}`);
+  console.log(`[Router Agent] Detected intent: ${intent}`);
 
   if (intent === "movies") {
-    const movieResult = await callMovieRagMcp(query);
+    const movies = await retrieveSimilarMoviesByRAG(query);
 
     console.log(
-      `[MCP Router Agent] movie-rag MCP returned ${movieResult.movies.length} movies.`
+      `[Router Agent] RAG returned ${movies.length} movies.`
     );
 
     return {
-      movies: movieResult.movies,
+      movies,
       series: [],
     };
   }
 
   if (intent === "series") {
-    const seriesResult = await callSeriesSearchMcp(query);
+    const series = await webSearchTool(query);
 
     console.log(
-      `[MCP Router Agent] series-search MCP returned ${seriesResult.series.length} series.`
+      `[Router Agent] Web search returned ${series.length} series.`
     );
 
     return {
       movies: [],
-      series: seriesResult.series,
+      series,
     };
   }
 
-  const [movieResult, seriesResult] = await Promise.all([
-    callMovieRagMcp(query),
-    callSeriesSearchMcp(query),
+  const [movies, series] = await Promise.all([
+    retrieveSimilarMoviesByRAG(query),
+    webSearchTool(query),
   ]);
 
   console.log(
-    `[MCP Router Agent] MCP services returned movies=${movieResult.movies.length}, series=${seriesResult.series.length}.`
+    `[Router Agent] Local functions returned movies=${movies.length}, series=${series.length}.`
   );
 
   return {
-    movies: movieResult.movies,
-    series: seriesResult.series,
+    movies,
+    series,
   };
 }
 
 /**
- * Detects which recommendation services are needed for a user request.
+ * Detects which recommendation functions are needed for a user request.
  *
- * Ambiguous requests intentionally call both MCP services so the app can still
+ * Ambiguous requests intentionally call both functions so the app can still
  * return useful results when the user does not clearly say movie or series.
  */
 export function detectRecommendationIntent(query: string): RecommendationIntent {

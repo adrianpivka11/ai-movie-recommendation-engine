@@ -12,8 +12,12 @@ app.listen(port, () => {
 function validateRuntimeEnv() {
   const requiredEnvVars = [
     "OPENAI_API_KEY",
-    "TOOL_CALLING_MODEL",
-    ...getDeploymentOnlyEnvVars(),
+    "SUPABASE_URL",
+    "SUPABASE_API_KEY",
+    "EMBEDDING_MODEL",
+    "RECOMMENDATION_MODEL",
+    "OPENAI_MODEL",
+    "OPENAI_MODEL_NON_REASONING",
   ];
 
   const missingEnvVars = requiredEnvVars.filter((name) => !process.env[name]);
@@ -23,20 +27,4 @@ function validateRuntimeEnv() {
       `Missing required environment variables: ${missingEnvVars.join(", ")}.`
     );
   }
-}
-
-function getDeploymentOnlyEnvVars() {
-  if (!isDeploymentRuntime()) {
-    return [];
-  }
-
-  return [
-    "MOVIE_RAG_MCP_URL",
-    "SERIES_SEARCH_MCP_URL",
-    "MCP_API_KEY",
-  ];
-}
-
-function isDeploymentRuntime() {
-  return process.env.NODE_ENV === "production" || process.env.RENDER === "true";
 }

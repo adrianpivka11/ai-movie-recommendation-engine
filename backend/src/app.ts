@@ -1,15 +1,10 @@
 import cors from "cors";
 import express from "express";
-import type { McpWarmupResult } from "./mcp/mcpClient.js";
 import type { AgentOutput } from "./types.js";
 
 // A small interface for the recommendation use case..
 // In production this calls the real AI agent, but tests can pass a fake handler.
 type RecommendationHandler = (query: string) => Promise<AgentOutput>;
-
-// A small interface for waking/checking remote MCP services.
-// In production this pings MCP /health endpoints, but tests can pass a fake handler.
-type WarmupHandler = () => Promise<McpWarmupResult[]>;
 
 /**
  * Creates and configures the Express application..
@@ -18,8 +13,7 @@ type WarmupHandler = () => Promise<McpWarmupResult[]>;
  * tests can import createApp() and call routes without opening a real network port.
  */
 export function createApp(
-  recommendationHandler: RecommendationHandler = runMovieChoiceAgent,
-  warmupHandler: WarmupHandler = runWarmupMcpServices
+  recommendationHandler: RecommendationHandler = runMovieChoiceAgent
 ) {
   const app = express();
 
@@ -35,24 +29,9 @@ export function createApp(
   });
 
   // Lightweight endpoint called by the frontend when the app opens.
-  // It lets the main backend wake/check both MCP services before the user searches.
-  app.get("/api/warmup", async (_req, res) => {
-    try {
-      const services = await warmupHandler();
-      const allServicesReady = services.every((service) => service.ok);
-
-      res.json({
-        status: allServicesReady ? "ok" : "partial",
-        services,
-      });
-    } catch (error) {
-      console.error("[Warmup Error]", error);
-      res.json({
-        status: "failed",
-        services: [],
-        error: "Warm-up request failed.",
-      });
-    }
+  // Only this backend needs waking now; keep the frontend's existing endpoint.
+  app.get("/api/warmup", (_req, res) => {
+    res.json({ status: "ok", services: [] });
   });
 
   // Main recommendation endpoint called by the React frontend.
@@ -117,12 +96,6 @@ export default app;
 async function runMovieChoiceAgent(query: string) {
   const { movieChoiceAgentLatestVersion } = await import("./agentLatestVersion.js");
   return movieChoiceAgentLatestVersion (query);
-}
-
-// Dynamically imports the MCP warmup client only when the warmup endpoint runs.
-async function runWarmupMcpServices() {
-  const { warmupMcpServices } = await import("./mcp/mcpClient.js");
-  return warmupMcpServices();
 }
 
 // Custom error type for errors where we intentionally choose the HTTP status

@@ -18,22 +18,21 @@ describe("Express app", () => {
     expect(response.body).toEqual({ status: "ok" });
   });
 
-  it("responds to the warmup endpoint with MCP service results", async () => {
-    const warmupResults = [
-      { service: "movie-rag" as const, ok: true, statusCode: 200 },
-      { service: "series-search" as const, ok: true, statusCode: 200 },
-    ];
-    const warmupHandler = vi.fn().mockResolvedValue(warmupResults);
-    const app = createApp(async () => emptyAgentOutput, warmupHandler);
+  it("responds to warmup without making external requests", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(
+      new Error("Warmup must not contact external services")
+    );
+    const app = createApp(async () => emptyAgentOutput);
 
-    const response = await request(app).get("/api/warmup");
+    try {
+      const response = await request(app).get("/api/warmup");
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      status: "ok",
-      services: warmupResults,
-    });
-    expect(warmupHandler).toHaveBeenCalledOnce();
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: "ok", services: [] });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it("returns 400 when recommendation request is empty", async () => {

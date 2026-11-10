@@ -64,6 +64,7 @@ type McpRequestOptions = {
  * text item and parses it back into strongly typed application data.
  */
 type McpToolResult = {
+  isError?: boolean;
   content?: Array<
     | {
         type: "text";
@@ -283,6 +284,13 @@ function parseMcpTextJson<TResponse>(
   const textContent = result.content?.find(
     (item): item is { type: "text"; text: string } => item.type === "text"
   );
+
+  // Failed tools return an error message, not the expected JSON response.
+  if (result.isError) {
+    throw new Error(
+      textContent?.text || `MCP tool "${toolName}" failed without an error message.`
+    );
+  }
 
   if (!textContent) {
     throw new Error(

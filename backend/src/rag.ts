@@ -9,6 +9,7 @@ import { getEnv } from "./env.js";
 
 
 const EMBEDDING_MODEL = getEnv('EMBEDDING_MODEL');
+const RECOMMENDATION_MODEL = getEnv('RECOMMENDATION_MODEL');
 
 
 // function/Agent tool to retrieve movies by RAG from Supabase PostgreSQL vector DB
@@ -60,7 +61,7 @@ export async function retrieveSimilarMoviesByRAG(query:string): Promise<MovieRec
     console.log(`[NORMAL] sending request to generate personalised answer`)
     console.log(`[NORMAL] user query: ${query} moviesArr: ${contextString}`)
     const result = await generateText({
-        model: openai("gpt-4.1-nano"),
+        model: openai(RECOMMENDATION_MODEL),
         output: Output.object({
             schema: z.object({
             recommendations: z

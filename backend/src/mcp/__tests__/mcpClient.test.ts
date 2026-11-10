@@ -12,6 +12,23 @@ afterEach(() => {
 });
 
 describe("MCP client", () => {
+  it("preserves the tool error message instead of parsing it as JSON", async () => {
+    const message = "The model `example-model` has been deprecated.";
+    const app = createMovieRagMcpApp(async () => {
+      throw new Error(message);
+    });
+    const server = await startTestServer(app);
+    vi.stubEnv("MOVIE_RAG_MCP_URL", `${server.baseUrl}/mcp`);
+
+    try {
+      await expect(callMovieRagMcp("Recommend WW2 movies.")).rejects.toThrow(
+        `MCP service "movie-rag" request failed: ${message}`
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
   it("calls the movie RAG MCP server and returns movies", async () => {
     const app = createMovieRagMcpApp(async () => ({
       movies: [

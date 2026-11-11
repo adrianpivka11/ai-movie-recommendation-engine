@@ -1,6 +1,6 @@
 # AWS SAM and Lambda container packaging
 
-Status: infrastructure definition and Dockerfile only. Nothing has been deployed.
+The template defines the AWS backend; deployment status must be checked in AWS.
 Handler tests already cover application logic with simulated external services;
 they do not validate Linux packaging, IAM permissions, API Gateway or SQS delivery.
 
@@ -103,11 +103,45 @@ SQS/Supabase. A successful POST with real configuration sends a real SQS message
 a worker invocation with real model credentials can incur OpenAI costs. Local
 HTTP emulation alone does not poll SQS or automatically run the worker. Local
 Docker execution does not prove Lambda IAM, cloud timeouts or SQS wiring work.
-The current frontend still uses the synchronous response; polling comes later.
+The frontend supports both synchronous Express responses and asynchronous AWS jobs.
+It submits once and polls GET /api/jobs/{jobId} with the returned bearer token.
+Tokens stay in memory and are not logged or added to URLs. Closing the page stops
+polling, not the worker. Polling stops after five minutes; an SQS retry can take
+longer (see visibility timeout above). Reloading loses the in-memory job credential.
 
-No deploy command is part of this step. A later SAM deployment must publish image
-artifacts to ECR, provide parameters, acknowledge IAM creation and verify the
-CloudFormation change set before creating resources.
+## Cloudflare frontend and enabling submissions
+
+Set the production build variable in Cloudflare Pages before rebuilding:
+
+```text
+VITE_API_BASE_URL=https://50bhr8zd19.execute-api.eu-north-1.amazonaws.com
+```
+
+Use root directory `frontend`, build command `npm run build`, output `dist`, and
+branch `aws-migration`. Publish a new build after changing code or variables;
+existing bundles do not pick up environment changes. No frontend secret is needed.
+Open https://ai-movie-recommendation-engine.pages.dev, not the hashed preview URL:
+the stack allows only that exact production origin. No warm-up endpoint is needed.
+
+The local `samconfig.toml` now sets EnableSubmissions=true. The template's safe
+default remains false. This is only a local configuration change until deployed.
+From the repository root, with Docker running and the moviechoice profile ready:
+
+```powershell
+sam build --template-file template.yaml
+sam deploy --profile moviechoice --region eu-north-1
+aws cloudformation describe-stacks --stack-name moviechoiceapp --profile moviechoice --region eu-north-1 --query "Stacks[0].Outputs"
+```
+
+Review the change set before confirming. This enables public job creation and
+therefore paid AI calls; retain throttling and configure billing/abuse protections.
+Verify SubmissionsEnabled=true in the output. Then test one search: POST should
+return 202 with jobId/accessToken, followed by authorized GET requests until a
+completed result (or safe failure). Never paste the accessToken into screenshots.
+
+SAM deployment publishes image artifacts to ECR, supplies the saved parameters,
+acknowledges IAM creation and asks for confirmation of the CloudFormation change
+set. The local samconfig.toml is gitignored; do not commit credentials or secret values.
 
 ## References
 

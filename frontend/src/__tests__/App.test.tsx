@@ -28,6 +28,21 @@ afterEach(() => {
 });
 
 describe("App", () => {
+  it("keeps loading until the AWS job completes, then renders its result", async () => {
+    let finishStatus!: (response: Response) => void;
+    const status = new Promise<Response>(resolve => { finishStatus = resolve; });
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ jobId: "job-1", accessToken: "secret" }), { status: 202 }))
+      .mockReturnValueOnce(status));
+    await submitSearch("Recommend series");
+    expect(screen.getByRole("button", { name: /loading/i })).toBeDisabled();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    finishStatus(new Response(JSON.stringify({ jobId: "job-1", status: "completed", result: {
+      movies: [], series: [{ title: "Dark", year: 2017, recommendation: "A mystery." }],
+    } })));
+    expect(await screen.findByText("Dark (2017)")).toBeVisible();
+  });
+
   it("shows an error message when the API returns an error response", async () => {
     mockFetchResponse(
       { error: "Recommendation service is temporarily unavailable." },
@@ -105,6 +120,7 @@ describe("App", () => {
           body: JSON.stringify({
             movieOrSerieUserRequest: "Recommend survival movies.",
           }),
+          signal: expect.any(AbortSignal),
         }
       );
     });

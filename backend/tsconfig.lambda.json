@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "files": [
+    "src/handlers/submitRecommendation.ts",
+    "src/handlers/processRecommendation.ts",
+    "src/handlers/getRecommendationStatus.ts"
+  ],
+  "include": [],
+  "exclude": ["src/**/__tests__/**", "src/**/*.test.ts", "src/**/*.spec.ts"]
+}

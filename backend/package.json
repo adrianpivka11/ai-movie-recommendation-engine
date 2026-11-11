@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.15",
+    "@aws-sdk/client-sqs": "^3.1166.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@supabase/supabase-js": "^2.45.0",
     "ai": "^7.0.28",
@@ -25,6 +26,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.164",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^22.0.0",

@@ -7,6 +7,11 @@ __pycache__/
 *.tsbuildinfo
 test-results/
 playwright-report/
+.aws-sam/
+samconfig.toml
+samconfig.yaml
+sam-env.local.json
+sam-parameters.local.json
 
 database/.env
 database/.venv/

@@ -86,6 +86,30 @@ describe("latest local router agent", () => {
     });
   });
 
+  it("waits for the other tool to finish before propagating a failure", async () => {
+    const error = new Error("RAG failed");
+    vi.mocked(retrieveSimilarMoviesByRAG).mockRejectedValue(error);
+    let finish!: (value: SeriesRecommendation[]) => void;
+    vi.mocked(webSearchTool).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    let settled = false;
+    const pending = movieChoiceAgentLatestVersion("movies and series").catch((reason) => {
+      settled = true;
+      return reason;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    finish(series);
+    expect(await pending).toBe(error);
+  });
+
+  it("preserves both errors when both tools fail", async () => {
+    const errors = [new Error("RAG failed"), new Error("Search failed")];
+    vi.mocked(retrieveSimilarMoviesByRAG).mockRejectedValue(errors[0]);
+    vi.mocked(webSearchTool).mockRejectedValue(errors[1]);
+    await expect(movieChoiceAgentLatestVersion("movies and series")).rejects.toMatchObject({ errors });
+  });
+
   it.each(["movies", "series", "movies and series"])(
     "propagates a local tool failure for %s instead of returning empty results",
     async (category) => {

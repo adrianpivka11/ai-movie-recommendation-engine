@@ -1,0 +1,211 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Movie recommendations - HTTP receivers and an asynchronous SQS worker.
+
+Parameters:
+  FrontendOrigin:
+    Type: String
+    Description: Exact frontend origin, without a trailing slash (no wildcard).
+    AllowedPattern: '^https://[A-Za-z0-9.-]+(:[0-9]+)?$|^http://localhost:[0-9]+$'
+  SupabaseUrl:
+    Type: String
+    AllowedPattern: '^https://[A-Za-z0-9.-]+/?$'
+  BackendSecretArn:
+    Type: String
+    Description: Existing Secrets Manager JSON secret with SUPABASE_API_KEY and OPENAI_API_KEY.
+    AllowedPattern: '^arn:[a-z0-9-]+:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+$'
+  EmbeddingModel:
+    Type: String
+    MinLength: 1
+    Description: Use the embedding model matching the existing Supabase vectors.
+  RecommendationModel:
+    Type: String
+    MinLength: 1
+  SeriesRecommendationModel:
+    Type: String
+    MinLength: 1
+    Description: Existing OPENAI_MODEL value.
+  SeriesSearchModel:
+    Type: String
+    MinLength: 1
+    Description: Existing OPENAI_MODEL_NON_REASONING value.
+  EnableSubmissions:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Explicitly enable public paid-job submission after deployment checks.
+
+Conditions:
+  SubmissionsEnabled: !Equals [!Ref EnableSubmissions, 'true']
+
+Globals:
+  Function:
+    Architectures: [x86_64]
+    MemorySize: 256
+    Environment:
+      Variables:
+        NODE_ENV: production
+        SUPABASE_URL: !Ref SupabaseUrl
+        # CloudFormation resolves this at deploy time, not during docker build.
+        SUPABASE_API_KEY: !Sub '{{resolve:secretsmanager:${BackendSecretArn}:SecretString:SUPABASE_API_KEY}}'
+
+Resources:
+  RecommendationApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: '$default'
+      CorsConfiguration:
+        AllowOrigins: [!Ref FrontendOrigin]
+        AllowMethods: [GET, POST, OPTIONS]
+        AllowHeaders: [Content-Type, Authorization]
+        MaxAge: 600
+      DefaultRouteSettings:
+        ThrottlingRateLimit: 5
+        ThrottlingBurstLimit: 10
+      RouteSettings:
+        'POST /api/recommend':
+          ThrottlingRateLimit: 1
+          ThrottlingBurstLimit: 2
+
+  RecommendationDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  RecommendationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      # 6 * worker timeout; the DB lease is separately fixed at 300 seconds.
+      VisibilityTimeout: 1440
+      MessageRetentionPeriod: 345600
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt RecommendationDeadLetterQueue.Arn
+        maxReceiveCount: 5
+
+  SubmitRecommendationFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerContext: ./backend
+      Dockerfile: Dockerfile
+      DockerTag: submit-v1
+    Properties:
+      PackageType: Image
+      Timeout: 25
+      # Zero blocks invocation until the owner deliberately enables submissions.
+      ReservedConcurrentExecutions: !If [SubmissionsEnabled, !Ref 'AWS::NoValue', 0]
+      ImageConfig:
+        Command: [dist/handlers/submitRecommendation.handler]
+      Environment:
+        Variables:
+          RECOMMENDATION_QUEUE_URL: !Ref RecommendationQueue
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt RecommendationQueue.QueueName
+      Events:
+        Submit:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref RecommendationApi
+            Path: /api/recommend
+            Method: POST
+            PayloadFormatVersion: '2.0'
+
+  GetRecommendationStatusFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerContext: ./backend
+      Dockerfile: Dockerfile
+      DockerTag: status-v1
+    Properties:
+      PackageType: Image
+      Timeout: 10
+      ImageConfig:
+        Command: [dist/handlers/getRecommendationStatus.handler]
+      # No SQS or OpenAI permissions/credentials; per-job auth runs in the handler.
+      Events:
+        Status:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref RecommendationApi
+            Path: /api/jobs/{jobId}
+            Method: GET
+            PayloadFormatVersion: '2.0'
+
+  ProcessRecommendationFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerContext: ./backend
+      Dockerfile: Dockerfile
+      DockerTag: worker-v1
+    Properties:
+      PackageType: Image
+      Timeout: 240
+      MemorySize: 1024
+      ImageConfig:
+        Command: [dist/handlers/processRecommendation.handler]
+      Environment:
+        Variables:
+          OPENAI_API_KEY: !Sub '{{resolve:secretsmanager:${BackendSecretArn}:SecretString:OPENAI_API_KEY}}'
+          EMBEDDING_MODEL: !Ref EmbeddingModel
+          RECOMMENDATION_MODEL: !Ref RecommendationModel
+          OPENAI_MODEL: !Ref SeriesRecommendationModel
+          OPENAI_MODEL_NON_REASONING: !Ref SeriesSearchModel
+      Policies:
+        - SQSPollerPolicy:
+            QueueName: !GetAtt RecommendationQueue.QueueName
+      Events:
+        Jobs:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt RecommendationQueue.Arn
+            BatchSize: 1
+            MaximumBatchingWindowInSeconds: 0
+            FunctionResponseTypes: [ReportBatchItemFailures]
+            ScalingConfig:
+              MaximumConcurrency: 2
+
+  SubmitLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${SubmitRecommendationFunction}'
+      RetentionInDays: 7
+  StatusLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${GetRecommendationStatusFunction}'
+      RetentionInDays: 7
+  WorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProcessRecommendationFunction}'
+      RetentionInDays: 7
+
+  DeadLetterQueueAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Failed deliveries need investigation; configure notification actions before production.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt RecommendationDeadLetterQueue.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  ApiBaseUrl:
+    Value: !Sub 'https://${RecommendationApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}'
+  RecommendationQueueUrl:
+    Value: !Ref RecommendationQueue
+  DeadLetterQueueUrl:
+    Value: !Ref RecommendationDeadLetterQueue
+  WorkerFunctionName:
+    Value: !Ref ProcessRecommendationFunction
+  SubmissionsEnabled:
+    Value: !Ref EnableSubmissions

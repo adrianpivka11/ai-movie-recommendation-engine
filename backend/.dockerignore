@@ -1,0 +1,15 @@
+# Allowlist build inputs: .env, host node_modules, dist and credentials stay out.
+**
+!Dockerfile
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.lambda.json
+!src/
+!src/**
+src/**/__tests__/**
+src/**/*.test.ts
+src/**/*.spec.ts
+src/**/.env*
+src/**/*.pem
+src/**/*.key

@@ -8,6 +8,18 @@ Full-stack movie recommendation app.
 - `backend` - Express TypeScript API server.
 - `database` - Python data pipeline, CSV files, and database preparation scripts.
 
+## AWS migration
+
+The planned asynchronous job API is documented in
+[recommendation-jobs-api.md](docs/recommendation-jobs-api.md).
+Its TypeScript contracts are in `backend/src/jobs/types.ts`; the current
+synchronous Express endpoint remains active until the handlers and frontend
+polling flow are implemented.
+
+SAM infrastructure and Lambda container packaging are described in
+[aws-sam.md](docs/aws-sam.md). These files do not deploy resources automatically;
+the existing local/Render Express application remains unchanged.
+
 ## Local development
 
 Install JavaScript dependencies:

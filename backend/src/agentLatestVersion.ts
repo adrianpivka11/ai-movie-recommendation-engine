@@ -67,10 +67,20 @@ export async function movieChoiceAgentLatestVersion(
     };
   }
 
-  const [movies, series] = await Promise.all([
+  // Wait for both tools before releasing a worker lease, even if one fails.
+  const results = await Promise.allSettled([
     retrieveSimilarMoviesByRAG(query),
     webSearchTool(query),
   ]);
+  const failures = results.filter((result) => result.status === "rejected");
+  if (failures.length === 1) throw failures[0].reason;
+  if (failures.length > 1) throw new AggregateError(failures.map((result) => result.reason), "Both recommendation tools failed");
+  const [movieResult, seriesResult] = results;
+  if (movieResult.status !== "fulfilled" || seriesResult.status !== "fulfilled") {
+    throw new Error("Missing recommendation tool result");
+  }
+  const movies = movieResult.value;
+  const series = seriesResult.value;
 
   console.log(
     `[Router Agent] Local functions returned movies=${movies.length}, series=${series.length}.`
